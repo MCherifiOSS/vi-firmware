@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
+set -x
 BOOTSTRAP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ -z $COMMON_SOURCED ]; then
@@ -8,12 +9,14 @@ if [ -z $COMMON_SOURCED ]; then
     # TODO this is kind of a hacky way of determining if root is required -
     # ideally we wouuld set up a little virtualenv in the dependencies folder
     SUDO_CMD=
-    if command -v sudo >/dev/null 2>&1; then
-        SUDO_CMD="sudo -E"
+    if [ -z $CI ]; then
+        if command -v sudo >/dev/null 2>&1; then
+            SUDO_CMD="sudo -E"
 
-        if [ -z $CI ] && [ -z $VAGRANT ]; then
-            echo "The bootstrap script needs to install a few packages to your system as an admin, and we will use the 'sudo' command - enter your password to continue"
-            $SUDO_CMD ls > /dev/null
+            if [ -z $CI ] && [ -z $VAGRANT ]; then
+                echo "The bootstrap script needs to install a few packages to your system as an admin, and we will use the 'sudo' command - enter your password to continue"
+                $SUDO_CMD ls > /dev/null
+            fi
         fi
     fi
 
@@ -88,7 +91,7 @@ if [ -z $COMMON_SOURCED ]; then
             set +e
             brew install $1
             set -e
-        else
+        elif [ -z $CI ]; then
             if [ -z $DISTRO ]; then
                 echo
                 echo "Missing $1 - install it using your distro's package manager or build from source"
@@ -192,7 +195,7 @@ pre-configured Vagrant environment. See the docs for more information."
         fi
     fi
 
-    if [ $DISTRO == "Ubuntu" ] && [ $ARCH == "x86_64" ]; then
+    if [ -z $CI ] && [ $DISTRO == "Ubuntu" ] && [ $ARCH == "x86_64" ]; then
         _install "libc6-i386"
     fi
 
@@ -231,12 +234,12 @@ pre-configured Vagrant environment. See the docs for more information."
         echo "Installing Python..."
         _install "python"
     fi
-    
+
     if [ $OS != "cygwin" ]; then
         echo "Installing Python development headers..."
         _install "python-dev"
     fi
-    
+
     if ! command -v pip >/dev/null 2>&1; then
         echo "Installing Pip..."
         if ! command -v easy_install >/dev/null 2>&1; then
@@ -250,16 +253,10 @@ pre-configured Vagrant environment. See the docs for more information."
         $SUDO_CMD easy_install pip
     fi
 
-    PIP_SUDO_CMD=
-    if [ -z $VIRTUAL_ENV ]; then
-        # Only use sudo if the user doesn't have an active virtualenv
-        PIP_SUDO_CMD=$SUDO_CMD
-    fi
-
-    $PIP_SUDO_CMD pip install --upgrade setuptools
-    $PIP_SUDO_CMD pip install --src dependencies --pre -Ur $BOOTSTRAP_DIR/ci-requirements.txt
+    pip install --user --upgrade setuptools
+    pip install --user --src dependencies --pre -Ur $BOOTSTRAP_DIR/ci-requirements.txt
     if [ -z $CI ]; then
-        $PIP_SUDO_CMD pip install --src dependencies --pre -Ur $BOOTSTRAP_DIR/pip-requirements.txt
+        pip install --user --src dependencies --pre -Ur $BOOTSTRAP_DIR/pip-requirements.txt
     fi
 
     COMMON_SOURCED=1
